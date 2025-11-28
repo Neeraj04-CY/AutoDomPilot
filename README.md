@@ -1,299 +1,136 @@
-# AutoDomPilot · Hybrid LLM + Playwright Browser Agent
+# Adaptive Browser Agent
 
-AutoDomPilot is a research-grade browser agent that:
+Adaptive Browser Agent is a research-grade project that:
 
-- Converts webpages into **semantic layout graphs** from the DOM.
-- Uses **OpenAI gpt‑4.1** to generate **deterministic JSON action plans**.
-- Executes plans via **Playwright**, with structured logging, dry-run mode, and hooks for self-healing.
+- Converts a web page into a **semantic layout graph**.
+- Uses an LLM planner (OpenAI `gpt-4.1`) to produce a **deterministic action plan** to achieve a user goal.
+- Executes plans with **Playwright** and can run in **dry-run** mode for safety.
+- Is designed for **self-healing** and future recovery strategies.
 
-The project is designed to showcase **robust web automation**, **retrieval-style reasoning over page structure**, and **reproducible evaluation**. It has been tested on real sites such as the public HerokuApp login page and local test flows.
+> ⚠️ This project is for research and educational purposes. Do **not** use it to automate websites that prohibit automated access in their Terms of Service.
 
---- 
+## Quickstart
 
-## 1. Features
-
-- **Semantic layout graph**  
-  DOM → cleaned nodes → spatial and structural edges → JSON layout graph used for LLM reasoning.
-
-- **LLM-driven planner with strict schemas**  
-  - System prompt enforces **JSON-only output** following a `Plan` schema.
-  - Plans use atomic actions (`find`, `fill`, `click`, `await`, `navigate`, `download`, `screenshot`, `upload`).
-  - All LLM I/O is validated using **Pydantic** schemas.
-
-- **Executor with Playwright**  
-  - Maps step types to Playwright actions.
-  - Saves per-step screenshots and DOM snapshots on failure.
-  - Supports **dry-run** (no actions) and **execute** modes.
-
-- **Self-healing hooks**  
-  - Failure classifier stub (LLM or heuristics) suggests recovery strategies (`rescan_dom`, `use_visual_match`, `use_history`, `ask_user`).
-  - Designed for future DOM mutation / re-planning experiments.
-
-- **Embeddings + FAISS**  
-  - Node embeddings via **OpenAI embeddings** (or fallback to `sentence-transformers`).
-  - Local FAISS index with on-disk cache for node embeddings.
-
-- **Reproducible artifacts**  
-  - Each run creates a timestamped folder with:
-    - `dom_raw.json`
-    - `layout_graph.json`
-    - `understanding.json`
-    - `plan.json`
-    - `executor_observations.json`
-    - `screenshots/step_*.png`
-    - `logs.jsonl` (structured logs via `structlog`)
-
-- **CI & tests**  
-  - Unit tests for schemas and DOM normalization.
-  - E2E test against a **local HTML login page** with mocked LLM (no API use in CI).
-  - GitHub Actions pipeline runs `black`, `isort`, `mypy` (soft), and `pytest`.
-
----
-
-## 2. Architecture
-
-Dataflow overview:
-
-1. **Playwright Worker** (`src/browser/playwright_worker.py`)
-   - Loads page, captures DOM, screenshot, bounding boxes.
-2. **DOM Extractor** (`src/extractor/dom_extractor.py`)
-   - Normalizes nodes, computes simple CSS-like paths, `dom_depth`.
-3. **Graph Builder** (`src/graph/builder.py`)
-   - Builds canonical `layout_graph` with nodes and edges (parent/child + spatial neighbors).
-4. **Vector / Embed Store** (`src/vector/embed_store.py`)
-   - Embeds nodes, caches vectors, builds FAISS index.
-5. **Page Understanding + Planner** (`src/llm/page_understander.py`, `src/llm/planner.py`)
-   - Uses MASTER PROMPT to produce:
-     - `understanding` over nodes.
-     - `plan` (structured JSON of steps).
-6. **Executor** (`src/executor/executor.py`)
-   - Executes plan via Playwright; logs `ExecutorObservation` per step.
-7. **Self-Healer** (`src/healer/self_healer.py`)
-   - Classifies failures and proposes recovery strategies (currently stubbed).
-8. **Controller / CLI** (`src/controller/cli.py`)
-   - Orchestrates full pipeline and manages run directories.
-
-See [`docs/architecture.md`](docs/architecture.md) for a deeper dive and diagrams.
-
----
-
-## 3. Quickstart
-
-### 3.1. Setup
+### 1. Clone and set up environment
 
 ```bash
-git clone https://github.com/<your-username>/AutoDomPilot.git
-cd AutoDomPilot
+git clone <your-fork-url> adaptive-browser-agent
+cd adaptive-browser-agent
 
 python -m venv .venv
-# Windows:
+# On Windows:
 .\.venv\Scripts\activate
-# Linux/macOS:
+# On Unix:
 # source .venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-Install Playwright browsers:
+### 2. Configure environment
 
-```bash
-playwright install
-```
-
-### 3.2. Configure environment
-
-Copy the template and set keys:
+Copy the template and edit:
 
 ```bash
 cp .env.template .env
 ```
 
-In `.env`, set:
+Set your OpenAI API key:
 
 ```env
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4.1
 OPENAI_EMBEDDING_MODEL=text-embedding-3-large
-
-# For FAISS, runs etc.
-FAISS_INDEX_PATH=./data/faiss_index.index
-RUNS_DIR=./runs
-PLAYWRIGHT_HEADLESS=true
-MAX_LLMS_TOKENS=8000
-LLM_RETRY_LIMIT=2
-LOG_LEVEL=INFO
 ```
 
-> LLM safety: by default, the controller tags the context with `no_sensitive=true` and does **not** send secrets (passwords) to the LLM unless you pass `--allow-sensitive`.
+Other settings have sensible defaults.
 
----
-
-## 4. Local HTML login demo (safe, offline)
-
-The repo includes a simple local login page at:
-
-- [`examples/demo_local_testsite/login.html`](examples/demo_local_testsite/login.html)
-
-Run the agent in **dry-run** mode:
+### 3. Install Playwright browsers
 
 ```bash
-python -m src.controller.cli \
-  --url "file:///<absolute-path-to-project>/examples/demo_local_testsite/login.html" \
-  --goal "Log in using test credentials and reach the dashboard" \
+playwright install
+```
+
+### 4. Run a local demo (dry-run)
+
+Prepare a local HTML demo page under:
+
+- `examples/demo_local_testsite/login.html` (a simple login page)
+
+Then run:
+
+```bash
+python -m src.controller.cli ^
+  --url "file:///C:/path/to/your/project/examples/demo_local_testsite/login.html" ^
+  --goal "Log in using test credentials" ^
   --dry-run
 ```
 
-Example (Windows PowerShell):
+On Unix:
 
 ```bash
-$proj = (Get-Location).Path
-python -m src.controller.cli `
-  --url "file:///$proj/examples/demo_local_testsite/login.html" `
-  --goal "Log in using test credentials and reach the dashboard" `
+python -m src.controller.cli \
+  --url "file:///home/you/adaptive-browser-agent/examples/demo_local_testsite/login.html" \
+  --goal "Log in using test credentials" \
   --dry-run
 ```
 
 This will:
 
-1. Extract DOM and screenshot.
-2. Build `layout_graph.json`.
-3. Call the LLM to produce `understanding` + `plan`.
-4. **Skip** actual actions (dry-run) but log everything.
+1. Launch Playwright headless.
+2. Extract DOM and bounding boxes.
+3. Normalize DOM into a `layout_graph.json`.
+4. (Optionally) build embeddings.
+5. Call the LLM in **dry-run mode** (no actual actions).
+6. Save artifacts in a new run directory under `./runs/YYYYMMDD_HHMMSS/`.
 
-Artifacts are saved in a new directory like:
+### 5. Execute actions (⚠️ read ToS warning first)
 
-```text
-runs/20251128_153012/
-  dom_raw.json
-  layout_graph.json
-  understanding.json
-  plan.json
-  executor_observations.json
-  screenshots/
-  logs.jsonl
-```
-
----
-
-## 5. HerokuApp login demo (public test site)
-
-The project includes a configuration for the public test site:
-
-- <https://the-internet.herokuapp.com/login>
-
-This site provides **public demo credentials**:
-
-- `tomsmith` / `SuperSecretPassword!`
-
-> These credentials are **not** hard-coded in the repo.  
-> You should provide them via environment variables at runtime, e.g.:
-
-```env
-HEROKUAPP_USERNAME=tomsmith
-HEROKUAPP_PASSWORD=SuperSecretPassword!
-```
-
-Then run:
+To actually perform actions with Playwright:
 
 ```bash
 python -m src.controller.cli \
-  --url "https://the-internet.herokuapp.com/login" \
-  --goal "Log in to HerokuApp using demo credentials and reach the secure area" \
+  --url "file:///.../examples/demo_local_testsite/login.html" \
+  --goal "Log in using test credentials" \
   --execute
 ```
 
-The agent will:
+- The executor will run the plan produced by the LLM.
+- Artifacts: screenshots and logs in `runs/<timestamp>/`.
 
-1. Extract the login page.
-2. Plan a multi-step login flow.
-3. Execute it via Playwright, logging each step.
+> ⚠️ **Terms of Service & Safety**  
+> - Do **not** point this agent at sites whose ToS disallow automation or scraping.  
+> - By default, **passwords and other secrets are not sent to the LLM**.  
+> - Use `--allow-sensitive` only if you fully understand the privacy implications and have permission.
 
-A placeholder for a curated example run is at:
+### Artifacts per run
 
-```text
-examples/heroku_login/run_sample/   # you can save one of your real runs here
+Each run creates a directory under `RUNS_DIR` (default `./runs`):
+
+- `layout_graph.json` — normalized page layout graph.
+- `dom_raw.json` — raw DOM extraction.
+- `plan.json` — planner output.
+- `understanding.json` — LLM semantic understanding (if applicable).
+- `screenshots/step_*.png` — screenshots per step.
+- `logs.jsonl` — structured logs (one JSON per line).
+
+## Tests
+
+Run unit and e2e tests:
+
+```bash
+pytest
 ```
 
-You can later commit one sanitized `run_sample` to show actual outputs.
+- Unit tests mock LLM calls and operate on fixtures in `data/fixtures`.
+- E2E tests for `demo_local_testsite` do **not** call OpenAI in CI (they are mocked).
 
----
+## Development
 
-## 6. Project layout
+- Code style: `black`, `isort`
+- Type checking: `mypy` (optional)
+- CI: GitHub Actions in `.github/workflows/ci.yml`
 
-```text
-AutoDomPilot/
-├─ README.md
-├─ LICENSE
-├─ .env.template
-├─ requirements.txt
-├─ docs/
-│  ├─ architecture.md
-│  └─ evaluation.md
-├─ examples/
-│  ├─ demo_local_testsite/
-│  │  ├─ login.html
-│  │  └─ task.json
-│  └─ heroku_login/
-│     └─ run_sample/        # placeholder, add one curated run later
-├─ data/
-│  ├─ fixtures/
-│  └─ embeddings_cache/
-├─ infra/
-│  ├─ Dockerfile
-│  └─ docker-compose.yml
-├─ scripts/
-│  ├─ simulate_dom_changes.py
-│  └─ run_benchmark.sh
-├─ src/
-│  ├─ config/
-│  ├─ controller/
-│  ├─ browser/
-│  ├─ extractor/
-│  ├─ graph/
-│  ├─ vector/
-│  ├─ llm/
-│  ├─ executor/
-│  ├─ healer/
-│  ├─ schema/
-│  ├─ utils/
-│  └─ tests/
-└─ .github/workflows/ci.yml
-```
+See:
 
----
-
-## 7. Evaluation & benchmarks
-
-See [`docs/evaluation.md`](docs/evaluation.md) for:
-
-- Metrics:
-  - Task success rate
-  - Mean steps per task
-  - Number of recovery attempts
-  - Time to completion
-- Test scenarios:
-  - Local login page with DOM mutations
-  - HerokuApp login
-- How to reproduce small benchmarks using:
-  - `scripts/run_benchmark.sh`
-
----
-
-## 8. Research angle
-
-AutoDomPilot is built to explore:
-
-- **Robustness of LLM agents** to DOM changes (distribution shift in UI).
-- **Representation and retrieval** over semantic layout graphs.
-- **Grounded planning**: plans constrained by validated JSON schemas and executors.
-- **Reproducibility**: every run creates full artifacts for later analysis.
-
-This makes it suitable as a **research internship portfolio project** in areas such as representation learning, robust NLP, and trustworthy retrieval systems.
-
----
-
-## 9. Citation
-
-If you reference AutoDomPilot in applications or reports, you can cite it as:
-
-> Neeraj Patil. *AutoDomPilot: A Hybrid LLM–Playwright Browser Agent for Robust Web Automation*, 2025. GitHub repository: <https://github.com/<your-username>/AutoDomPilot>.
+- `docs/architecture.md` for high-level design.
+- `docs/runbook.md` for debugging and operational tips.

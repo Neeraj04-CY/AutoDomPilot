@@ -1,0 +1,27 @@
+openai>=1.4.0
+playwright>=1.35.0
+pydantic>=1.10,<2.0
+# Editable install of a local shim that re-exports Pydantic v1 BaseSettings API
+-e ./vendor/pydantic-settings-shim
+sentence-transformers==2.2.2
+# faiss-cpu has no official Windows wheels on PyPI and often fails to install on Windows.
+# Install faiss-cpu on Linux/macOS via pip or on Windows via conda: `conda install -c pytorch faiss-cpu`
+# Use environment marker so pip on Windows will skip it.
+faiss-cpu==1.7.4; sys_platform != "win32"
+# Pin a huggingface_hub version compatible with sentence-transformers 2.2.2
+# Keep a huggingface_hub compatible with transformers/tokenizers
+# transformers requires huggingface_hub >= 0.34.0; allow any 0.x <1.0
+huggingface_hub>=0.34.0,<1.0
+pyee>=13.0.0
+greenlet>=3.0
+pyyaml>=6.0
+typing-inspection>=0.4.2
+annotated-types>=0.5
+pytest>=7.0
+jsonschema>=4.0
+httpx>=0.24.0
+python-dotenv
+black
+isort
+mypy
+structlog
