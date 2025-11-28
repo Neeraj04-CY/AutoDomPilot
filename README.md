@@ -8,7 +8,7 @@ AutoDomPilot is a research-grade browser agent that:
 
 The project is designed to showcase **robust web automation**, **retrieval-style reasoning over page structure**, and **reproducible evaluation**. It has been tested on real sites such as the public HerokuApp login page and local test flows.
 
----
+--- 
 
 ## 1. Features
 
